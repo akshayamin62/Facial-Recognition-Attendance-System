@@ -243,39 +243,49 @@ def attendancebtn():
     ret = True
     j = 1
     flag = -1
+    attendance_list = set()
+    attendance_id_list = set()
     while ret:
         ret, frame = cap.read()
-        if extract_faces(frame) != ():
-            (x, y, w, h) = extract_faces(frame)[0]
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 20), 2)
-            face = cv2.resize(frame[y:y + h, x:x + w], (50, 50))
-            identified_person = identify_face(face.reshape(1, -1))[0]
-            identified_person_name = identified_person.split('$')[0]
-            identified_person_id = identified_person.split('$')[1]
+        faces = extract_faces(frame)
+        if faces != ():
+            for curr_face in faces:
+                (x, y, w, h) = curr_face
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 20), 2)
+                face = cv2.resize(frame[y:y + h, x:x + w], (50, 50))
+                identified_person = identify_face(face.reshape(1, -1))[0]
+                identified_person_name = identified_person.split('$')[0]
+                identified_person_id = identified_person.split('$')[1]
+                attendance_list.add(identified_person)
+                attendance_id_list.add(identified_person_id.split('U22CS')[-1])
 
-            if flag != identified_person:
+                if flag != identified_person:
+                    j = 1
+                    flag = identified_person
+
+                # if j % 20 == 0:
+                #     add_attendance(identified_person)
+
+                # cv2.putText(frame, f'Name: {identified_person_name}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20),
+                #             2,
+                #             cv2.LINE_AA)
+                # cv2.putText(frame, f'ID: {identified_person_id}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
+                #             cv2.LINE_AA)
+                cv2.putText(frame, f'ID: {str(attendance_id_list)}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
+                            cv2.LINE_AA)
+                cv2.putText(frame, 'Press Esc to close', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
+                            cv2.LINE_AA)
+                j += 1
+            else:
                 j = 1
-                flag = identified_person
-
-            if j % 20 == 0:
-                add_attendance(identified_person)
-
-            cv2.putText(frame, f'Name: {identified_person_name}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20),
-                        2,
-                        cv2.LINE_AA)
-            cv2.putText(frame, f'ID: {identified_person_id}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
-                        cv2.LINE_AA)
-            cv2.putText(frame, 'Press Esc to close', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
-                        cv2.LINE_AA)
-            j += 1
-        else:
-            j = 1
-            flag = -1
+                flag = -1
 
         cv2.namedWindow('Attendance', cv2.WINDOW_NORMAL)
         cv2.setWindowProperty('Attendance', cv2.WND_PROP_TOPMOST, 1)
         cv2.imshow('Attendance', frame)
         if cv2.waitKey(1) == 27:
+            for i in attendance_list: 
+                add_attendance(i)
             break
 
     cap.release()
