@@ -39,6 +39,16 @@ tr:nth-child(even) {
 	background-color: #DAE1FF;
 }
 
+#video-preview {
+    width: 100%;
+    max-width: 640px;
+}
+#record-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
 
 </style>
 
@@ -68,13 +78,21 @@ tr:nth-child(even) {
     <div style="max-width: 60%; border-radius: 24px; padding: 0 0 20px 0; background-color: #F4F3FB; margin: 0px auto;">
         <h2 style="border-radius: 24px 24px 0px 0px; background-color: #E7DEFF; color: #1F0060; padding: 18px 10px 18px 10px;">
             Today's Attendance <i class="material-icons">app_registration</i></h2>
-        <div>
-            <a style="text-decoration: none;max-width: 300px;" href="/attendancebtn">
+        <div id="start">
+            <!-- <a style="text-decoration: none;max-width: 300px;" href=""> -->
                 <button style="letter-spacing: 4px; background-color: #3C5BA9 !important; border: 0px; font-size: 22px; border-radius: 12px; width: 70%; padding: 10px; margin-top: 30px; margin-bottom: 30px;"
-                        type='submit' class='btn btn-primary'>Take Attendance
+                        type='submit' class='btn btn-primary' id="start-button">Take Attendance
                 </button>
-            </a>
+            <!-- </a> -->
         </div>
+        <div id="stop">
+            <!-- <a style="text-decoration: none;max-width: 300px;" href=""> -->
+                <button style="display:none; letter-spacing: 4px; background-color: #3C5BA9 !important; border: 0px; font-size: 22px; border-radius: 12px; width: 70%; padding: 10px; margin-top: 30px; margin-bottom: 30px;"
+                        type='submit' class='btn btn-primary' id="stop-button">Stop Recording
+                </button>
+            <!-- </a> -->
+        </div>
+        <video id="video-preview" autoplay muted style="display: none;"></video>
         {% if l %}
         <table style="background-color: white; margin: 12px auto 20px auto;">
             <tr>
@@ -116,7 +134,58 @@ tr:nth-child(even) {
 	}
 	setInterval(clock, 1000);
 
+    const videoPreview = document.getElementById('video-preview');
+    const startButton = document.getElementById('start-button');
+    const stopButton = document.getElementById('stop-button');
 
+    startButton.onclick = startRecording;
+    stopButton.onclick = stopRecording;
+
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            videoPreview.srcObject = stream;
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = function(event) {
+                recordedChunks.push(event.data);
+            }
+
+            mediaRecorder.onstop = function() {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const formData = new FormData();
+                formData.append('video', blob);
+
+                fetch('/process_video', {
+                    method: 'POST',
+                    body: formData
+                })
+                .catch(error => {
+                    console.error('There was an error with the fetch operation:', error);
+                });
+            }
+            
+            mediaRecorder.start();
+            startButton.style.display='none';
+            stopButton.style.display='inline';
+            videoPreview.style.display='inline';
+        } catch (err) {
+            console.error('Error accessing media devices: ', err);
+        }
+    }
+    
+    function stopRecording() {
+        startButton.style.display = 'inline';
+        stopButton.style.display = 'none';
+        videoPreview.style.display='none';
+        mediaRecorder.stop();
+        location='/attendancebtn'
+    }
+
+    
 </script>
 </body>
 

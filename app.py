@@ -2,7 +2,7 @@ import csv
 import shutil
 import cv2
 import os
-from flask import Flask, request, render_template, session, redirect, g, url_for
+from flask import Flask, request, render_template, send_file, session, redirect, g, url_for, jsonify
 from datetime import date
 from datetime import datetime
 import numpy as np
@@ -82,6 +82,8 @@ def totalreg():
 
 # ======= Get Face From Image =========
 def extract_faces(img):
+    if img is None:  # Check if the frame is empty
+        return []
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     face_points = face_detector.detectMultiScale(gray_img, 1.5, 7)
     return face_points
@@ -225,8 +227,20 @@ def attendance():
                            datetoday2=datetoday2)
 
 
+@app.route('/process_video', methods=['POST'])
+def process_video():
+    if 'video' not in request.files:
+        return 'No video file provided', 400
+
+    video_file = request.files['video']
+    video_file.save('video.webm')
+
+    return send_file('video.webm')
+
+
 @app.route('/attendancebtn', methods=['GET'])
 def attendancebtn():
+
     if len(os.listdir('static/faces')) == 0:
         return render_template('attendance.html', datetoday2=datetoday2,
                                mess='Database is empty! Register yourself first.')
@@ -234,7 +248,21 @@ def attendancebtn():
     if 'face_recognition_model.pkl' not in os.listdir('static'):
         train_model()
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture('video.webm')
+    # # Read and display frames from the video file
+    # while cap.isOpened():
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         break
+        
+    #     # Display the frame
+    #     cv2.imshow('Video', frame)
+        
+    #     # Check for 'q' key press to exit
+    #     if cv2.waitKey(25) & 0xFF == ord('q'):
+    #         break
+
+
     if cap is None or not cap.isOpened():
         names, rolls, sec, times, dates, reg, l = extract_attendance()
         return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
@@ -247,6 +275,8 @@ def attendancebtn():
     attendance_id_list = set()
     while ret:
         ret, frame = cap.read()
+        if frame is None or frame.size == 0 or frame.shape[0] == 0 or frame.shape[1] == 0:  # Check if the frame is empty or has invalid dimensions
+            continue;
         faces = extract_faces(frame)
         if faces != ():
             for curr_face in faces:
@@ -287,9 +317,12 @@ def attendancebtn():
             for i in attendance_list: 
                 add_attendance(i)
             break
-
+    
+    for i in attendance_list: 
+        add_attendance(i)
     cap.release()
     cv2.destroyAllWindows()
+    
     names, rolls, sec, times, dates, reg, l = extract_attendance()
     return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
                            datetoday2=datetoday2)
