@@ -43,7 +43,16 @@ tr:nth-child(even) {
    text-align: center;
    font-size: 22px;
 }
-
+#video-preview {
+    width: 100%;
+    max-width: 640px;
+}
+#record-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
 
 
 </style>
@@ -70,25 +79,103 @@ tr:nth-child(even) {
         <div style="max-width: 40%; border-radius: 24px; padding: 0 0 40px 0; background-color: #F4F3FB; margin: 0px auto;">
             <h2 style="vertical-align: center; border-radius: 24px 24px 0px 0px; background-color: #E7DEFF; color: #1F0060; padding: 18px 10px 18px 10px;">
                 Add New User <i class="material-icons">person_add</i></h2>
-            <form action='/adduserbtn' method="POST" enctype="multipart/form-data" style="max-width: 80%; margin: auto;">
+            <div style="max-width: 80%; margin: auto;">
                 <br>
-                <input type="text" id="newusername" name='newusername' placeholder="Username"
+                <input type="text" id="name" name='newusername' placeholder="Username"
                        style="width: 70%; font-size: 16px; margin: 8px 0 10px 0; border: 1px solid #797475; border-radius: 12px; padding: 12px 16px 12px 16px;"
                        required>
                 <br>
-                <input type="text" id="newusereid" name='newuserid' placeholder="User ID"
+                <input type="text" id="id" name='newuserid' placeholder="User ID"
                        style="width: 70%; font-size: 16px; margin: 8px 0 10px 0; border: 1px solid #797475; border-radius: 12px; padding: 12px 16px 12px 16px;"
                        required>
-                <input type="hidden" id="newusersection" name='newusersection' value="None"
-                       required>
+                <select id="section" name='newusersection' value="None"
+                required>
+                    <option value="None">Select your Section</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                </select>
                 <br>
                 <button style="letter-spacing: 4px; background-color: #3C5BA9 !important; width: 70%; margin-top: 20px; font-size: 22px; padding: 10px; border-radius: 12px; border: 0px;"
-                        type='submit' class='btn btn-dark'>Submit
+                        class='btn btn-dark' id="start-button">Start Recording
                 </button>
-            </form>
+                <button style="display:none; letter-spacing: 4px; background-color: #3C5BA9 !important; width: 70%; margin-top: 20px; font-size: 22px; padding: 10px; border-radius: 12px; border: 0px;"
+                        class='btn btn-dark' id="stop-button">Stop Recording
+                </button>
+            </div>
+            <video style="display: none;" id="video-preview" autoplay muted></video>
             {% if mess %}<br> <h5 style="padding: 25px; color: #201A19;">{{ mess }}</h5> {% endif %}
         </div>
     </div>
+    <script>
+        const videoPreview = document.getElementById('video-preview');
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
+
+        startButton.onclick = startRecording;
+        stopButton.onclick = stopRecording;
+
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        async function startRecording(e) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                videoPreview.srcObject = stream;
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = function(event) {
+                    recordedChunks.push(event.data);
+                }
+
+                mediaRecorder.onstop = function() {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const formData = new FormData();
+                    formData.append('video', blob);
+
+                    fetch('/process_video', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .catch(error => {
+                        console.error('There was an error with the fetch operation:', error);
+                    });
+
+                    fetch('/adduserbtn', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            name:document.getElementById('name').value,
+                            id:document.getElementById('id').value,
+                            section:document.getElementById('section').value
+                        })
+                    })
+                    .then((doc)=>{
+                        <!-- alert('Wait for admin to approve!') -->
+                        console.log(doc.body)
+                    })
+                    .catch(error => {
+                        console.error('There was an error with the fetch operation:', error);
+                    });
+                }
+                
+                mediaRecorder.start();
+                startButton.style.display='none';
+                stopButton.style.display='inline';
+                videoPreview.style.display='inline';
+            } catch (err) {
+                console.error('Error accessing media devices: ', err);
+            }
+        }
+        
+        function stopRecording(e) {
+            startButton.style.display = 'inline';
+            stopButton.style.display = 'none';
+            videoPreview.style.display='none';
+            mediaRecorder.stop();
+        }
+    </script>
 </body>
 
 </html>

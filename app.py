@@ -306,9 +306,9 @@ def attendancebtn():
                 cv2.putText(frame, 'Press Esc to close', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
                             cv2.LINE_AA)
                 j += 1
-            else:
-                j = 1
-                flag = -1
+        else:
+            j = 1
+            flag = -1
 
         cv2.namedWindow('Attendance', cv2.WINDOW_NORMAL)
         cv2.setWindowProperty('Attendance', cv2.WND_PROP_TOPMOST, 1)
@@ -336,11 +336,12 @@ def adduser():
 
 @app.route('/adduserbtn', methods=['GET', 'POST'])
 def adduserbtn():
-    newusername = request.form['newusername']
-    newuserid = request.form['newuserid']
-    newusersection = request.form['newusersection']
+    data = request.json
+    newusername = data.get('name')
+    newuserid = data.get('id')
+    newusersection = data.get('section')
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture('video.webm')
     if cap is None or not cap.isOpened():
         return render_template('adduser.html', mess='Camera not available.')
 
@@ -364,6 +365,8 @@ def adduserbtn():
     i, j = 0, 0
     while 1:
         ignore, frame = cap.read()
+        if frame is None or frame.size == 0 or frame.shape[0] == 0 or frame.shape[1] == 0:  # Check if the frame is empty or has invalid dimensions
+            continue
         faces = extract_faces(frame)
         for (x, y, w, h) in faces:
             cv2.putText(frame, f'Images Captured: {i}/50', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
@@ -381,7 +384,6 @@ def adduserbtn():
         cv2.imshow('Collecting Face Data', frame)
         if cv2.waitKey(1) == 27:
             break
-
     cap.release()
     cv2.destroyAllWindows()
 
