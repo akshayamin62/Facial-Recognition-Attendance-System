@@ -85,7 +85,8 @@ def extract_faces(img):
     if img is None:  # Check if the frame is empty
         return []
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    face_points = face_detector.detectMultiScale(gray_img, 1.5, 7)
+    gray_img = cv2.equalizeHist(gray_img)
+    face_points = face_detector.detectMultiScale(gray_img,scaleFactor=1.1,minNeighbors=1,minSize=(30,30),flags=cv2.CASCADE_SCALE_IMAGE)
     return face_points
 
 
