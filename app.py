@@ -82,17 +82,18 @@ def totalreg():
 
 # ======= Get Face From Image =========
 def extract_faces(img):
-    if img is None:  # Check if the frame is empty
+    if img is None:
         return []
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_img = cv2.equalizeHist(gray_img)
-    face_points = face_detector.detectMultiScale(gray_img,scaleFactor=1.1,minNeighbors=1,minSize=(30,30),flags=cv2.CASCADE_SCALE_IMAGE)
+    face_points = face_detector.detectMultiScale(gray_img,scaleFactor=1.35,minNeighbors=5,minSize=(30,30),flags=cv2.CASCADE_SCALE_IMAGE)
     return face_points
 
 
 # ======= Identify Face Using ML ========
 def identify_face(face_array):
     model = joblib.load('static/face_recognition_model.pkl')
+    print(model.predict_proba(face_array))
     return model.predict(face_array)
 
 
