@@ -93,8 +93,14 @@ def extract_faces(img):
 # ======= Identify Face Using ML ========
 def identify_face(face_array):
     model = joblib.load('static/face_recognition_model.pkl')
-    print(model.predict_proba(face_array))
-    return model.predict(face_array)
+    confidence_scores = model.predict_proba(face_array).max(axis=1)
+    return model.predict(face_array),confidence_scores
+
+# def identify_face(face_array):
+#     model = joblib.load('static/face_recognition_model.pkl')
+#     probabilities = model.predict_proba(face_array)
+#     predictions = model.predict(face_array)
+#     return predictions, probabilities
 
 
 # ======= Train Model Using Available Faces ========
@@ -116,7 +122,7 @@ def train_model():
             labels.append(user)
 
     faces = np.array(faces)
-    knn = KNeighborsClassifier(n_neighbors=7)
+    knn = KNeighborsClassifier(n_neighbors=21)
     knn.fit(faces, labels)
     joblib.dump(knn, 'static/face_recognition_model.pkl')
 
@@ -240,6 +246,95 @@ def process_video():
     return send_file('video.webm')
 
 
+# @app.route('/attendancebtn', methods=['GET'])
+# def attendancebtn():
+
+#     if len(os.listdir('static/faces')) == 0:
+#         return render_template('attendance.html', datetoday2=datetoday2,
+#                                mess='Database is empty! Register yourself first.')
+
+#     if 'face_recognition_model.pkl' not in os.listdir('static'):
+#         train_model()
+
+#     cap = cv2.VideoCapture('video.webm')
+#     # # Read and display frames from the video file
+#     # while cap.isOpened():
+#     #     ret, frame = cap.read()
+#     #     if not ret:
+#     #         break
+        
+#     #     # Display the frame
+#     #     cv2.imshow('Video', frame)
+        
+#     #     # Check for 'q' key press to exit
+#     #     if cv2.waitKey(25) & 0xFF == ord('q'):
+#     #         break
+
+
+#     if cap is None or not cap.isOpened():
+#         names, rolls, sec, times, dates, reg, l = extract_attendance()
+#         return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
+#                                totalreg=totalreg(), datetoday2=datetoday2, mess='Camera not available.')
+
+#     ret = True
+#     j = 1
+#     flag = -1
+#     attendance_list = set()
+#     attendance_id_list = set()
+#     while ret:
+#         ret, frame = cap.read()
+#         if frame is None or frame.size == 0 or frame.shape[0] == 0 or frame.shape[1] == 0:  # Check if the frame is empty or has invalid dimensions
+#             continue;
+#         faces = extract_faces(frame)
+#         if faces != ():
+#             for curr_face in faces:
+#                 (x, y, w, h) = curr_face
+#                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 20), 2)
+#                 face = cv2.resize(frame[y:y + h, x:x + w], (50, 50))
+#                 identified_person = identify_face(face.reshape(1, -1))[0]
+#                 identified_person_name = identified_person.split('$')[0]
+#                 identified_person_id = identified_person.split('$')[1]
+#                 attendance_list.add(identified_person)
+#                 attendance_id_list.add(identified_person_id.split('U22CS')[-1])
+
+#                 if flag != identified_person:
+#                     j = 1
+#                     flag = identified_person
+
+#                 # if j % 20 == 0:
+#                 #     add_attendance(identified_person)
+
+#                 # cv2.putText(frame, f'Name: {identified_person_name}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20),
+#                 #             2,
+#                 #             cv2.LINE_AA)
+#                 # cv2.putText(frame, f'ID: {identified_person_id}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
+#                 #             cv2.LINE_AA)
+#                 cv2.putText(frame, f'ID: {str(attendance_id_list)}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
+#                             cv2.LINE_AA)
+#                 cv2.putText(frame, 'Press Esc to close', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
+#                             cv2.LINE_AA)
+#                 j += 1
+#         else:
+#             j = 1
+#             flag = -1
+
+#         cv2.namedWindow('Attendance', cv2.WINDOW_NORMAL)
+#         cv2.setWindowProperty('Attendance', cv2.WND_PROP_TOPMOST, 1)
+#         cv2.imshow('Attendance', frame)
+#         if cv2.waitKey(1) == 27:
+#             for i in attendance_list: 
+#                 add_attendance(i)
+#             break
+    
+#     for i in attendance_list: 
+#         add_attendance(i)
+#     cap.release()
+#     cv2.destroyAllWindows()
+    
+#     names, rolls, sec, times, dates, reg, l = extract_attendance()
+#     return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
+#                            datetoday2=datetoday2)
+
 @app.route('/attendancebtn', methods=['GET'])
 def attendancebtn():
 
@@ -250,7 +345,7 @@ def attendancebtn():
     if 'face_recognition_model.pkl' not in os.listdir('static'):
         train_model()
 
-    cap = cv2.VideoCapture('video.webm')
+    cap = cv2.VideoCapture('video.mp4')
     # # Read and display frames from the video file
     # while cap.isOpened():
     #     ret, frame = cap.read()
@@ -275,38 +370,39 @@ def attendancebtn():
     flag = -1
     attendance_list = set()
     attendance_id_list = set()
+    threshold=0
+    student_confidances = dict()
     while ret:
         ret, frame = cap.read()
-        if frame is None or frame.size == 0 or frame.shape[0] == 0 or frame.shape[1] == 0:  # Check if the frame is empty or has invalid dimensions
-            continue;
+        if frame is None or frame.size == 0 or frame.shape[0] == 0 or frame.shape[1] == 0:
+            continue
+
         faces = extract_faces(frame)
         if faces != ():
             for curr_face in faces:
                 (x, y, w, h) = curr_face
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 20), 2)
                 face = cv2.resize(frame[y:y + h, x:x + w], (50, 50))
-                identified_person = identify_face(face.reshape(1, -1))[0]
-                identified_person_name = identified_person.split('$')[0]
-                identified_person_id = identified_person.split('$')[1]
-                attendance_list.add(identified_person)
-                attendance_id_list.add(identified_person_id.split('U22CS')[-1])
+                cv2.imshow('Face',face)
+                predictions, confidence_scores = identify_face(face.reshape(1, -1))
 
-                if flag != identified_person:
-                    j = 1
-                    flag = identified_person
+                # Assuming predictions and confidence_scores are returned as lists
+                for prediction, confidence in zip(predictions, confidence_scores):
+                    identified_person_name = prediction.split('$')[0]
+                    identified_person_id = prediction.split('$')[1]
+                    if confidence > threshold:  # Set your desired threshold here
+                        attendance_list.add(prediction)
+                        if not student_confidances.__contains__(identified_person_id):
+                            student_confidances[identified_person_id]=[confidence]
+                        else:
+                            student_confidances[identified_person_id].append(confidence)
+                        attendance_id_list.add(identified_person_id.split('U22CS')[-1])
+                        cv2.putText(frame, f'Confidence: {confidence:.2f}', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2, cv2.LINE_AA)
 
-                # if j % 20 == 0:
-                #     add_attendance(identified_person)
-
-                # cv2.putText(frame, f'Name: {identified_person_name}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20),
-                #             2,
-                #             cv2.LINE_AA)
-                # cv2.putText(frame, f'ID: {identified_person_id}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
-                #             cv2.LINE_AA)
-                cv2.putText(frame, f'ID: {str(attendance_id_list)}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
-                            cv2.LINE_AA)
-                cv2.putText(frame, 'Press Esc to close', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
-                            cv2.LINE_AA)
+                        cv2.putText(frame, f'ID: {str(attendance_id_list)}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
+                                    cv2.LINE_AA)
+                        cv2.putText(frame, 'Press Esc to close', (30, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
+                                    cv2.LINE_AA)
                 j += 1
         else:
             j = 1
@@ -320,14 +416,82 @@ def attendancebtn():
                 add_attendance(i)
             break
     
-    for i in attendance_list: 
-        add_attendance(i)
+    # for i in attendance_list: 
+    #     add_attendance(i)
+
+    for i in student_confidances:
+        student_confidances[i]=sum(student_confidances[i])/len(student_confidances[i])
+    print("*********",student_confidances)
     cap.release()
     cv2.destroyAllWindows()
     
     names, rolls, sec, times, dates, reg, l = extract_attendance()
     return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
                            datetoday2=datetoday2)
+
+# @app.route('/attendancebtn', methods=['GET'])
+# def attendancebtn():
+#     if len(os.listdir('static/faces')) == 0:
+#         return render_template('attendance.html', datetoday2=datetoday2,
+#                                mess='Database is empty! Register yourself first.')
+
+#     if 'face_recognition_model.pkl' not in os.listdir('static'):
+#         train_model()
+
+#     cap = cv2.VideoCapture('video.webm')
+#     if cap is None or not cap.isOpened():
+#         names, rolls, sec, times, dates, reg, l = extract_attendance()
+#         return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
+#                                totalreg=totalreg(), datetoday2=datetoday2, mess='Camera not available.')
+
+#     ret = True
+#     j = 1
+#     flag = -1
+#     while ret:
+#         ret, frame = cap.read()
+#         if not ret:
+#             print("Error: Failed to read frame from the camera.")
+#             continue
+#         if frame is None or frame.size==0 or frame.shape[0] <= 0 or frame.shape[1] <= 0:
+#             print("Error: Invalid frame size.")
+#             continue
+#         faces = extract_faces(frame)
+#         for (x, y, w, h) in faces:
+#             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 20), 2)
+#             face = cv2.resize(frame[y:y + h, x:x + w], (50, 50))
+#             predictions, probabilities = identify_face(face.reshape(1, -1))
+#             for pred, prob in zip(predictions, probabilities):
+#                 identified_person_name = pred.split('$')[0]
+#                 identified_person_id = pred.split('$')[1]
+#                 accuracy = np.max(prob) * 100
+#                 if flag != pred:
+#                     j = 1
+#                     flag = pred
+
+#                 if j % 20 == 0:
+#                     add_attendance(pred)
+
+#                 cv2.putText(frame, f'Name: {identified_person_name}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1,
+#                             (255, 0, 20), 2, cv2.LINE_AA)
+#                 cv2.putText(frame, f'ID: {identified_person_id}', (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1,
+#                             (255, 0, 20), 2, cv2.LINE_AA)
+#                 cv2.putText(frame, f'Accuracy: {accuracy:.2f}%', (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1,
+#                             (0, 127, 255), 2, cv2.LINE_AA)
+#                 cv2.putText(frame, 'Press Esc to close', (30, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 127, 255), 2,
+#                             cv2.LINE_AA)
+#                 j += 1
+
+#         cv2.namedWindow('Attendance', cv2.WINDOW_NORMAL)
+#         cv2.imshow('Attendance', frame)
+#         cv2.setWindowProperty('Attendance', cv2.WND_PROP_TOPMOST, 1)
+#         if cv2.waitKey(1) == 27:
+#             break
+
+#     cap.release()
+#     cv2.destroyAllWindows()
+#     names, rolls, sec, times, dates, reg, l = extract_attendance()
+#     return render_template('attendance.html', names=names, rolls=rolls, sec=sec, times=times, l=l,
+#                            datetoday2=datetoday2)
 
 
 # ========== Flask Add New User ============
@@ -373,12 +537,12 @@ def adduserbtn():
         for (x, y, w, h) in faces:
             cv2.putText(frame, f'Images Captured: {i}/50', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 20), 2,
                         cv2.LINE_AA)
-            if j % 10 == 0:
-                name = newusername + '_' + str(i) + '.jpg'
-                cv2.imwrite(userimagefolder + '/' + name, frame[y:y + h, x:x + w])
-                i += 1
+            # if j % 10 == 0:
+            name = newusername + '_' + str(i) + '.jpg'
+            cv2.imwrite(userimagefolder + '/' + name, frame[y:y + h, x:x + w])
+            i += 1
             j += 1
-        if i == 50:
+        if i == 500:
             break
 
         cv2.namedWindow('Collecting Face Data', cv2.WINDOW_NORMAL)
